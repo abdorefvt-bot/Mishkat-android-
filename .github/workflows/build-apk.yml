@@ -17,6 +17,10 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
+      - name: Generate launcher icons from original Canva SVG
+        run: |
+          python3 -m pip install --user cairosvg
+          python3 .github/scripts/generate_icons.py
       - name: Build debug APK
         run: gradle assembleDebug
       - uses: actions/upload-artifact@v4
