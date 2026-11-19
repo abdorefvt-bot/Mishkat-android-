@@ -12,7 +12,7 @@ RES = ROOT / "app/src/main/res"
 for density, size in {"mdpi":48,"hdpi":72,"xhdpi":96,"xxhdpi":144,"xxxhdpi":192}.items():
     out = RES / f"mipmap-{density}" / "ic_launcher.png"
     out.parent.mkdir(parents=True, exist_ok=True)
-    cairosvg.svg2png(url=str(SVG), write_to=str(out), output_width=size, output_height=size)
+    cairosvg.svg2png(url=str(SVG), write_to=str(out), output_width=size, output_height=size)\n    round_out = RES / f"mipmap-{density}" / "ic_launcher_round.png"\n    cairosvg.svg2png(url=str(SVG), write_to=str(round_out), output_width=size, output_height=size)
 
 # Adaptive icon foreground: remove the full-bleed background rectangles, then scale
 # the white logo into Android's central safe zone. Background color is defined separately.
