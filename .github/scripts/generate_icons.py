@@ -5,7 +5,7 @@ import cairosvg
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[2]
-SVG = ROOT / "app/src/main/res/drawable/mishkat_logo.svg"
+SVG = ROOT / ".github/assets/mishkat_logo.svg"
 RES = ROOT / "app/src/main/res"
 
 # Standard launcher assets preserve the complete original artwork and burgundy background.
