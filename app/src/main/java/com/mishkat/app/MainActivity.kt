@@ -2,7 +2,9 @@ package com.mishkat.app
 
 import android.annotation.SuppressLint
 import android.os.Bundle
+import android.view.View
 import android.webkit.WebChromeClient
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
@@ -13,20 +15,51 @@ class MainActivity : ComponentActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        webView = WebView(this)
-        webView.settings.javaScriptEnabled = true
-        webView.settings.domStorageEnabled = true
-        webView.settings.loadsImagesAutomatically = true
-        webView.webChromeClient = WebChromeClient()
-        webView.webViewClient = WebViewClient()
+
+        webView = WebView(this).apply {
+            setLayerType(View.LAYER_TYPE_HARDWARE, null)
+            overScrollMode = View.OVER_SCROLL_NEVER
+            isVerticalScrollBarEnabled = false
+            isHorizontalScrollBarEnabled = false
+
+            settings.apply {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                loadsImagesAutomatically = true
+                cacheMode = WebSettings.LOAD_DEFAULT
+                builtInZoomControls = false
+                displayZoomControls = false
+                setSupportZoom(false)
+                javaScriptCanOpenWindowsAutomatically = false
+                mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            }
+
+            webChromeClient = WebChromeClient()
+            webViewClient = WebViewClient()
+        }
+
         setContentView(webView)
-        if (savedInstanceState == null) webView.loadUrl("https://mishkatt.framer.website")
-        else webView.restoreState(savedInstanceState)
+        if (savedInstanceState == null) {
+            webView.loadUrl("https://mishkatt.framer.website")
+        } else {
+            webView.restoreState(savedInstanceState)
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
-        webView.saveState(outState)
+        if (::webView.isInitialized) webView.saveState(outState)
         super.onSaveInstanceState(outState)
+    }
+
+    override fun onDestroy() {
+        if (::webView.isInitialized) {
+            webView.stopLoading()
+            webView.loadUrl("about:blank")
+            webView.clearHistory()
+            webView.removeAllViews()
+            webView.destroy()
+        }
+        super.onDestroy()
     }
 
     @Deprecated("Deprecated in Java")
