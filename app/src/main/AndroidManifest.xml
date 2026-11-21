@@ -22,8 +22,7 @@
         <receiver
             android:name=".MishkatVerseWidgetProvider"
             android:exported="true"
-            android:label="@string/widget_label_mishkat"
-            >
+            android:label="@string/widget_label_mishkat">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="com.mishkat.app.widget.NEXT_VERSE" />
