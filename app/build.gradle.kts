@@ -9,8 +9,8 @@ android {
         applicationId = "com.mishkat.app"
         minSdk = 23
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
     }
     buildTypes { release { isMinifyEnabled = false } }
     compileOptions {
@@ -23,4 +23,5 @@ android {
 dependencies {
     implementation("androidx.activity:activity-ktx:1.10.1")
     implementation("androidx.core:core-ktx:1.15.0")
+    implementation("androidx.media:media:1.7.0")
 }
