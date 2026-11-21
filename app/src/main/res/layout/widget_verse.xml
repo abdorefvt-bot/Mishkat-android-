@@ -1,17 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
  android:id="@+id/widget_root" android:layout_width="match_parent" android:layout_height="match_parent"
- android:background="@drawable/widget_liquid_glass_bg" android:padding="17dp">
- <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent"
-  android:gravity="center" android:orientation="vertical">
-  <TextView android:id="@+id/verse_text" android:layout_width="match_parent" android:layout_height="wrap_content"
-   android:autoSizeMaxTextSize="27sp" android:autoSizeMinTextSize="15sp" android:autoSizeStepGranularity="1sp"
-   android:autoSizeTextType="uniform" android:fontFamily="@font/amiri_quran" android:gravity="center"
-   android:includeFontPadding="false" android:maxLines="2" android:ellipsize="end"
-   android:textColor="#202631" android:textDirection="rtl" android:textSize="25sp" />
-  <TextView android:id="@+id/verse_source" android:layout_width="match_parent" android:layout_height="wrap_content"
-   android:layout_marginTop="5dp" android:fontFamily="@font/ibm_plex_sans_arabic" android:gravity="center"
-   android:includeFontPadding="false" android:maxLines="1" android:textColor="#66717D"
-   android:textDirection="rtl" android:textSize="10sp" />
- </LinearLayout>
-</FrameLayout>
+ android:orientation="vertical" android:gravity="center" android:background="@android:color/transparent"
+ android:padding="2dp">
+ <FrameLayout android:layout_width="match_parent" android:layout_height="0dp"
+  android:layout_weight="1" android:background="@drawable/widget_liquid_glass_bg" android:padding="15dp">
+  <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent"
+   android:gravity="center" android:orientation="vertical">
+   <TextView android:id="@+id/verse_text" android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:autoSizeMaxTextSize="26sp" android:autoSizeMinTextSize="12sp" android:autoSizeStepGranularity="1sp"
+    android:autoSizeTextType="uniform" android:fontFamily="@font/amiri_quran" android:gravity="center"
+    android:includeFontPadding="false" android:maxLines="2" android:ellipsize="end"
+    android:textColor="#202631" android:textDirection="rtl" android:textSize="24sp" />
+   <TextView android:id="@+id/verse_source" android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:layout_marginTop="5dp" android:fontFamily="@font/ibm_plex_sans_arabic" android:gravity="center"
+    android:includeFontPadding="false" android:maxLines="1" android:textColor="#66717D"
+    android:textDirection="rtl" android:textSize="10sp" />
+  </LinearLayout>
+ </FrameLayout>
+ <TextView android:id="@+id/widget_brand" android:layout_width="match_parent" android:layout_height="wrap_content"
+  android:layout_marginTop="2dp" android:fontFamily="sans-serif-medium" android:gravity="center"
+  android:includeFontPadding="false" android:letterSpacing="0.14" android:maxLines="1"
+  android:text="@string/widget_label_mishkat" android:textColor="#718091" android:textSize="8sp" />
+</LinearLayout>
