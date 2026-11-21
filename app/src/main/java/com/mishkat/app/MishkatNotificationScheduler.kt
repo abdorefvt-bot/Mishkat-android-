@@ -78,7 +78,8 @@ object MishkatNotificationScheduler {
             put("completed", completed)
         }
         val p = prefs(context)
-        p.edit().putString("day_$date", day.toString()).apply()
+        p.edit().putString("time_zone", timeZoneId).putString("day_$date", day.toString()).apply()
+        for (key in prayerNames.keys) markCompleted(context, date, key, completed.optBoolean(key, false))
         val dates = (p.getStringSet("scheduled_dates", emptySet()) ?: emptySet()).toMutableSet()
         dates.add(date)
         p.edit().putStringSet("scheduled_dates", dates).apply()
@@ -93,9 +94,11 @@ object MishkatNotificationScheduler {
         p.edit().putString("day_$date", day.toString()).apply()
         for (key in prayerNames.keys) {
             val isComplete = completed.optBoolean(key, false)
+            markCompleted(context, date, key, isComplete)
             val requestKey = "$date-$key"
             if (isComplete) {
                 cancel(context, ACTION_MISSED, requestKey)
+                cancelNotification(context, ("$date-$key-$ACTION_MISSED").hashCode())
             } else {
                 val time = prayerInstant(day, key) ?: continue
                 val missedAt = time + 30L * 60L * 1000L
@@ -111,6 +114,7 @@ object MishkatNotificationScheduler {
         val completed = day.optJSONObject("completed") ?: JSONObject()
         for (key in prayerNames.keys) {
             val requestKey = "$date-$key"
+            markCompleted(context, date, key, completed.optBoolean(key, false))
             cancel(context, ACTION_ADHAN, requestKey)
             cancel(context, ACTION_MISSED, requestKey)
             val prayerAt = prayerInstant(day, key) ?: continue
@@ -204,6 +208,10 @@ object MishkatNotificationScheduler {
 
     fun markCompleted(context: Context, date: String, key: String, completed: Boolean) {
         prefs(context).edit().putBoolean("completed_$date-$key", completed).apply()
+    }
+
+    private fun cancelNotification(context: Context, id: Int) {
+        context.getSystemService(NotificationManager::class.java).cancel(id)
     }
 
     private fun show(context: Context, id: Int, title: String, body: String) {
