@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import androidx.media.app.NotificationCompat.MediaStyle
 import android.support.v4.media.MediaMetadataCompat
@@ -16,10 +17,16 @@ import android.support.v4.media.session.PlaybackStateCompat
 
 class AudioPlaybackService : Service() {
     private var mediaSession: MediaSessionCompat? = null
+    private var playbackWakeLock: PowerManager.WakeLock? = null
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        val powerManager = getSystemService(PowerManager::class.java)
+        playbackWakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Mishkat:AudioPlayback").apply {
+            setReferenceCounted(false)
+            acquire()
+        }
         mediaSession = MediaSessionCompat(this, "MishkatAudio").apply {
             setCallback(object : MediaSessionCompat.Callback() {})
             isActive = true
@@ -83,6 +90,8 @@ class AudioPlaybackService : Service() {
     }
 
     override fun onDestroy() {
+        playbackWakeLock?.let { if (it.isHeld) it.release() }
+        playbackWakeLock = null
         mediaSession?.isActive = false
         mediaSession?.release()
         mediaSession = null
