@@ -114,7 +114,9 @@ object MishkatNotificationScheduler {
         val completed = day.optJSONObject("completed") ?: JSONObject()
         for (key in prayerNames.keys) {
             val requestKey = "$date-$key"
-            markCompleted(context, date, key, completed.optBoolean(key, false))
+            val isComplete = completed.optBoolean(key, false)
+            markCompleted(context, date, key, isComplete)
+            if (isComplete) cancelNotification(context, ("$date-$key-$ACTION_MISSED").hashCode())
             cancel(context, ACTION_ADHAN, requestKey)
             cancel(context, ACTION_MISSED, requestKey)
             val prayerAt = prayerInstant(day, key) ?: continue
