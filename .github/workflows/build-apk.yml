@@ -21,6 +21,8 @@ jobs:
         run: |
           python3 -m pip install --user cairosvg pillow
           python3 .github/scripts/generate_icons.py
+      - name: Decode bundled widget fonts
+        run: python3 .github/scripts/decode_widget_fonts.py
       - name: Build debug APK
         run: gradle assembleDebug
       - uses: actions/upload-artifact@v4
