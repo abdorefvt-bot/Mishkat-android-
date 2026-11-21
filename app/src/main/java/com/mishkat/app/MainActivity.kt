@@ -174,15 +174,27 @@ class MainActivity : ComponentActivity() {
                               document.title || 'مِشكاة';
                             if (window.MishkatNativeAudio) window.MishkatNativeAudio.onPlay(String(title).trim());
                           }, true);
-                          function syncPause() {
+                          function notifyNativeStop() {
                             window.setTimeout(function() {
                               if (!activeMedia() && window.MishkatNativeAudio) {
                                 window.MishkatNativeAudio.onPause();
                               }
-                            }, 180);
+                            }, 220);
                           }
-                          document.addEventListener('pause', syncPause, true);
-                          document.addEventListener('ended', syncPause, true);
+                          // Android may dispatch a media pause when the WebView moves to the background.
+                          // Keep the foreground media service alive in that case so playback can continue.
+                          function handleMediaPause() {
+                            if (document.visibilityState === 'hidden') return;
+                            notifyNativeStop();
+                          }
+                          function handleMediaEnded() {
+                            notifyNativeStop();
+                          }
+                          document.addEventListener('pause', handleMediaPause, true);
+                          document.addEventListener('ended', handleMediaEnded, true);
+                          document.addEventListener('visibilitychange', function() {
+                            if (document.visibilityState === 'visible') notifyNativeStop();
+                          });
                         })();
                         """.trimIndent(),
                         null
