@@ -192,8 +192,16 @@ class MainActivity : ComponentActivity() {
         setContentView(webView)
         ViewCompat.requestApplyInsets(webView)
 
-        if (savedInstanceState == null) webView.loadUrl("https://mishkatt.framer.website")
-        else webView.restoreState(savedInstanceState)
+        if (savedInstanceState == null) {
+            // Refresh remote Framer assets once after an APK update without clearing localStorage.
+            val cachePrefs = getSharedPreferences("mishkat_web_cache", MODE_PRIVATE)
+            val installedVersion = packageManager.getPackageInfo(packageName, 0).versionCode.toLong()
+            if (cachePrefs.getLong("version", -1L) != installedVersion) {
+                webView.clearCache(true)
+                cachePrefs.edit().putLong("version", installedVersion).apply()
+            }
+            webView.loadUrl("https://mishkatt.framer.website")
+        } else webView.restoreState(savedInstanceState)
     }
 
     override fun onResume() {
