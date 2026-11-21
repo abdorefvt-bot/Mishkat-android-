@@ -138,6 +138,10 @@ class MainActivity : ComponentActivity() {
                 javaScriptEnabled = true
                 domStorageEnabled = true
                 loadsImagesAutomatically = true
+                // Use the real device viewport so Framer selects the correct Phone/Tablet breakpoint.
+                useWideViewPort = true
+                loadWithOverviewMode = false
+                textZoom = 100
                 cacheMode = WebSettings.LOAD_DEFAULT
                 builtInZoomControls = false
                 displayZoomControls = false
