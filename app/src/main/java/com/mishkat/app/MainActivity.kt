@@ -2,7 +2,10 @@ package com.mishkat.app
 
 import android.annotation.SuppressLint
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
+import android.content.Intent
+import android.webkit.JavascriptInterface
 import android.view.View
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
@@ -15,6 +18,31 @@ import androidx.core.view.WindowInsetsCompat
 
 class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
+
+    inner class NativeAudioBridge {
+        @JavascriptInterface
+        fun onPlay(title: String?) {
+            if (!::webView.isInitialized || !isTrustedPage()) return
+            val intent = Intent(this@MainActivity, AudioPlaybackService::class.java).apply {
+                action = AudioPlaybackService.ACTION_PLAY
+                putExtra(AudioPlaybackService.EXTRA_TITLE, title?.take(160) ?: "مِشكاة")
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
+        }
+
+        @JavascriptInterface
+        fun onPause() {
+            if (!::webView.isInitialized || !isTrustedPage()) return
+            stopService(Intent(this@MainActivity, AudioPlaybackService::class.java))
+        }
+    }
+
+    private fun isTrustedPage(): Boolean =
+        ::webView.isInitialized && (webView.url?.startsWith("https://mishkatt.framer.website") == true)
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -53,10 +81,50 @@ class MainActivity : ComponentActivity() {
                 setSupportZoom(false)
                 javaScriptCanOpenWindowsAutomatically = false
                 mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                mediaPlaybackRequiresUserGesture = false
             }
 
+            addJavascriptInterface(NativeAudioBridge(), "MishkatNativeAudio")
             webChromeClient = WebChromeClient()
-            webViewClient = WebViewClient()
+            webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView, url: String) {
+                    super.onPageFinished(view, url)
+                    if (!url.startsWith("https://mishkatt.framer.website")) return
+                    view.evaluateJavascript(
+                        """
+                        (function() {
+                          if (window.__mishkatNativeAudioHooked) return;
+                          window.__mishkatNativeAudioHooked = true;
+                          function activeMedia() {
+                            return Array.prototype.some.call(
+                              document.querySelectorAll('audio,video'),
+                              function(el) { return !el.paused && !el.ended; }
+                            );
+                          }
+                          document.addEventListener('play', function(event) {
+                            var el = event.target;
+                            if (!(el instanceof HTMLMediaElement)) return;
+                            var title = el.getAttribute('aria-label') ||
+                              el.getAttribute('title') ||
+                              (el.closest('[data-framer-name]') && el.closest('[data-framer-name]').innerText) ||
+                              document.title || 'مِشكاة';
+                            if (window.MishkatNativeAudio) window.MishkatNativeAudio.onPlay(String(title).trim());
+                          }, true);
+                          function syncPause() {
+                            window.setTimeout(function() {
+                              if (!activeMedia() && window.MishkatNativeAudio) {
+                                window.MishkatNativeAudio.onPause();
+                              }
+                            }, 180);
+                          }
+                          document.addEventListener('pause', syncPause, true);
+                          document.addEventListener('ended', syncPause, true);
+                        })();
+                        """.trimIndent(),
+                        null
+                    )
+                }
+            }
         }
 
         setContentView(webView)
