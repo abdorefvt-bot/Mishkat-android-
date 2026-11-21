@@ -113,6 +113,8 @@ class MainActivity : ComponentActivity() {
             .isAppearanceLightStatusBars = false
 
         MishkatNotificationScheduler.createChannels(this)
+        // Rebuild persisted prayer and adhkar alarms on every app start.
+        MishkatNotificationScheduler.restoreSchedules(this)
         MishkatNotificationScheduler.setAdhkarEnabled(this, true)
         requestNotificationAccess()
 
@@ -206,6 +208,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        MishkatNotificationScheduler.restoreSchedules(this)
         MishkatNotificationScheduler.setAppInBackground(this, false)
     }
 
