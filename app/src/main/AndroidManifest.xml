@@ -19,6 +19,19 @@
             </intent-filter>
         </activity>
 
+        <receiver
+            android:name=".MishkatVerseWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_label_mishkat">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.mishkat.app.widget.NEXT_VERSE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/mishkat_verse_widget_info" />
+        </receiver>
+
         <service
             android:name=".AudioPlaybackService"
             android:enabled="true"
