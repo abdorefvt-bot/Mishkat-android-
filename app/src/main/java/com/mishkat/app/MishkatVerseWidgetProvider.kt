@@ -6,6 +6,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.widget.RemoteViews
 import org.json.JSONArray
 import java.util.Calendar
@@ -19,7 +20,10 @@ class MishkatVerseWidgetProvider : AppWidgetProvider() {
  override fun onDisabled(context: Context) { context.getSystemService(AlarmManager::class.java).cancel(pending(context)) }
  override fun onReceive(context: Context, intent: Intent?) {
   super.onReceive(context, intent)
-  if (intent?.action == ACTION_NEXT) updateWidgets(context, true)
+  if (intent?.action == ACTION_NEXT) {
+   updateWidgets(context, true)
+   scheduleHourlyUpdate(context)
+  }
  }
  companion object {
   private const val PREFS="mishkat_verse_widget"
@@ -30,7 +34,15 @@ class MishkatVerseWidgetProvider : AppWidgetProvider() {
    val manager=AppWidgetManager.getInstance(context)
    if(manager.getAppWidgetIds(ComponentName(context,MishkatVerseWidgetProvider::class.java)).isEmpty()) return
    val next=Calendar.getInstance().apply { add(Calendar.HOUR_OF_DAY,1); set(Calendar.MINUTE,0); set(Calendar.SECOND,0); set(Calendar.MILLISECOND,0) }.timeInMillis
-   context.getSystemService(AlarmManager::class.java).setInexactRepeating(AlarmManager.RTC,next,AlarmManager.INTERVAL_HOUR,pending(context))
+   val alarm=context.getSystemService(AlarmManager::class.java)
+   val operation=pending(context)
+   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarm.canScheduleExactAlarms()) {
+    alarm.setAndAllowWhileIdle(AlarmManager.RTC,next,operation)
+   } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+    alarm.setExactAndAllowWhileIdle(AlarmManager.RTC,next,operation)
+   } else {
+    alarm.setExact(AlarmManager.RTC,next,operation)
+   }
   }
   fun updateWidgets(context: Context, advance: Boolean) {
    val manager=AppWidgetManager.getInstance(context)
