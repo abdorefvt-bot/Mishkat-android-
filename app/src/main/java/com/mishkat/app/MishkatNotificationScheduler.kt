@@ -214,6 +214,10 @@ object MishkatNotificationScheduler {
         context.getSystemService(NotificationManager::class.java).cancel(id)
     }
 
+    private fun cancelNotification(context: Context, id: Int) {
+        context.getSystemService(NotificationManager::class.java).cancel(id)
+    }
+
     private fun show(context: Context, id: Int, title: String, body: String) {
         createChannels(context)
         val launch = context.packageManager.getLaunchIntentForPackage(context.packageName)
