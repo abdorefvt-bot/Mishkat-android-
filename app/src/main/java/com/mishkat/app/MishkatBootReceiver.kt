@@ -10,11 +10,15 @@ class MishkatBootReceiver : BroadcastReceiver() {
             Intent.ACTION_BOOT_COMPLETED -> {
                 MishkatNotificationScheduler.setAppInBackground(context, true)
                 MishkatNotificationScheduler.restoreSchedules(context)
+                MishkatVerseWidgetProvider.scheduleHourlyUpdate(context)
+                MishkatVerseWidgetProvider.updateWidgets(context, false)
             }
             Intent.ACTION_TIME_CHANGED,
             Intent.ACTION_TIMEZONE_CHANGED,
             "android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" -> {
                 MishkatNotificationScheduler.restoreSchedules(context)
+                MishkatVerseWidgetProvider.scheduleHourlyUpdate(context)
+                MishkatVerseWidgetProvider.updateWidgets(context, false)
             }
         }
     }
