@@ -143,7 +143,7 @@ object MishkatNotificationScheduler {
             }.parse(day.optString("date")) ?: return null
         } catch (_: Exception) { return null }
         return Calendar.getInstance(zone).apply {
-            time = date
+            this.time = date
             set(Calendar.HOUR_OF_DAY, hour)
             set(Calendar.MINUTE, minute)
             set(Calendar.SECOND, 0)
@@ -210,10 +210,6 @@ object MishkatNotificationScheduler {
 
     fun markCompleted(context: Context, date: String, key: String, completed: Boolean) {
         prefs(context).edit().putBoolean("completed_$date-$key", completed).apply()
-    }
-
-    private fun cancelNotification(context: Context, id: Int) {
-        context.getSystemService(NotificationManager::class.java).cancel(id)
     }
 
     private fun cancelNotification(context: Context, id: Int) {
