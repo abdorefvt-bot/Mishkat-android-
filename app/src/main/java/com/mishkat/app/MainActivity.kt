@@ -1,10 +1,15 @@
 package com.mishkat.app
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.app.AlarmManager
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.content.Intent
+import android.provider.Settings
 import android.webkit.JavascriptInterface
 import android.view.View
 import android.webkit.WebChromeClient
@@ -22,38 +27,84 @@ class MainActivity : ComponentActivity() {
     inner class NativeAudioBridge {
         @JavascriptInterface
         fun onPlay(title: String?) {
-            if (!::webView.isInitialized || !isTrustedPage()) return
+            if (!isTrustedPage()) return
             val intent = Intent(this@MainActivity, AudioPlaybackService::class.java).apply {
                 action = AudioPlaybackService.ACTION_PLAY
                 putExtra(AudioPlaybackService.EXTRA_TITLE, title?.take(160) ?: "مِشكاة")
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(intent)
-            } else {
-                startService(intent)
-            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
+            else startService(intent)
         }
 
         @JavascriptInterface
         fun onPause() {
-            if (!::webView.isInitialized || !isTrustedPage()) return
+            if (!isTrustedPage()) return
             stopService(Intent(this@MainActivity, AudioPlaybackService::class.java))
+        }
+    }
+
+    inner class NativeNotificationsBridge {
+        @JavascriptInterface
+        fun schedulePrayerDay(date: String, timeZone: String, timesJson: String, completedJson: String) {
+            if (!isTrustedPage()) return
+            MishkatNotificationScheduler.setTimeZone(this@MainActivity, timeZone)
+            MishkatNotificationScheduler.schedulePrayerDay(
+                this@MainActivity, date, timeZone, timesJson, completedJson
+            )
+        }
+
+        @JavascriptInterface
+        fun updatePrayerStatuses(date: String, completedJson: String) {
+            if (!isTrustedPage()) return
+            MishkatNotificationScheduler.updatePrayerStatuses(this@MainActivity, date, completedJson)
+        }
+
+        @JavascriptInterface
+        fun setAdhkarNotifications(enabled: Boolean) {
+            if (!isTrustedPage()) return
+            MishkatNotificationScheduler.setAdhkarEnabled(this@MainActivity, enabled)
         }
     }
 
     private fun isTrustedPage(): Boolean =
         ::webView.isInitialized && (webView.url?.startsWith("https://mishkatt.framer.website") == true)
 
+    private fun requestNotificationAccess() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 2402)
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val alarmManager = getSystemService(AlarmManager::class.java)
+            val prefs = getSharedPreferences("mishkat_notifications", MODE_PRIVATE)
+            if (!alarmManager.canScheduleExactAlarms() && !prefs.getBoolean("exact_alarm_prompted", false)) {
+                prefs.edit().putBoolean("exact_alarm_prompted", true).apply()
+                try {
+                    startActivity(
+                        Intent(
+                            Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                            Uri.parse("package:$packageName")
+                        )
+                    )
+                } catch (_: Exception) { }
+            }
+        }
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Keep the Android status bar visible while allowing edge-to-edge drawing.
-        // The WebView content is then inset below status icons and display cutouts.
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = Color.TRANSPARENT
         WindowCompat.getInsetsController(window, window.decorView)
             .isAppearanceLightStatusBars = false
+
+        MishkatNotificationScheduler.createChannels(this)
+        MishkatNotificationScheduler.setAdhkarEnabled(this, true)
+        requestNotificationAccess()
 
         webView = WebView(this).apply {
             setLayerType(View.LAYER_TYPE_HARDWARE, null)
@@ -85,6 +136,7 @@ class MainActivity : ComponentActivity() {
             }
 
             addJavascriptInterface(NativeAudioBridge(), "MishkatNativeAudio")
+            addJavascriptInterface(NativeNotificationsBridge(), "MishkatNativeNotifications")
             webChromeClient = WebChromeClient()
             webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView, url: String) {
@@ -130,11 +182,18 @@ class MainActivity : ComponentActivity() {
         setContentView(webView)
         ViewCompat.requestApplyInsets(webView)
 
-        if (savedInstanceState == null) {
-            webView.loadUrl("https://mishkatt.framer.website")
-        } else {
-            webView.restoreState(savedInstanceState)
-        }
+        if (savedInstanceState == null) webView.loadUrl("https://mishkatt.framer.website")
+        else webView.restoreState(savedInstanceState)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        MishkatNotificationScheduler.setAppInBackground(this, false)
+    }
+
+    override fun onPause() {
+        MishkatNotificationScheduler.setAppInBackground(this, true)
+        super.onPause()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
