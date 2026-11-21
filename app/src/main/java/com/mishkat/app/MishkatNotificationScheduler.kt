@@ -195,7 +195,7 @@ object MishkatNotificationScheduler {
             val zone = TimeZone.getTimeZone(p.getString("time_zone", "Africa/Cairo"))
             val now = Calendar.getInstance(zone)
             val index = (now.get(Calendar.HOUR_OF_DAY) * 2 + if (now.get(Calendar.MINUTE) >= 30) 1 else 0) % adhkar.size
-            show(context, 3200 + index, "وَذَكِّرْ", adhkar[index])
+            show(context, 3200 + index, "", adhkar[index])
         }
     }
 
@@ -227,7 +227,7 @@ object MishkatNotificationScheduler {
         }
         val notification = NotificationCompat.Builder(context, CHANNEL_REMINDERS)
             .setSmallIcon(context.applicationInfo.icon)
-            .setContentTitle(title)
+            .setContentTitle(title.takeIf { it.isNotBlank() })
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setContentIntent(contentIntent)
