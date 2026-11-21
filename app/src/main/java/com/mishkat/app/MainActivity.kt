@@ -74,8 +74,12 @@ class MainActivity : ComponentActivity() {
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 2402)
+            return
         }
+        requestExactAlarmAccess()
+    }
 
+    private fun requestExactAlarmAccess() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val alarmManager = getSystemService(AlarmManager::class.java)
             val prefs = getSharedPreferences("mishkat_notifications", MODE_PRIVATE)
@@ -91,6 +95,12 @@ class MainActivity : ComponentActivity() {
                 } catch (_: Exception) { }
             }
         }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 2402) requestExactAlarmAccess()
     }
 
     @SuppressLint("SetJavaScriptEnabled")
