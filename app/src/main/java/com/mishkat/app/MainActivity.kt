@@ -37,6 +37,31 @@ class MainActivity : ComponentActivity() {
         }
 
         @JavascriptInterface
+        fun onBackground(title: String?, url: String?, positionSeconds: Double): Boolean {
+            if (!isTrustedPage()) return false
+            val safeUrl = url?.takeIf { it.startsWith("https://") && it.length <= 4096 } ?: return false
+            val intent = Intent(this@MainActivity, AudioPlaybackService::class.java).apply {
+                action = AudioPlaybackService.ACTION_BACKGROUND
+                putExtra(AudioPlaybackService.EXTRA_TITLE, title?.take(160) ?: "مِشكاة")
+                putExtra(AudioPlaybackService.EXTRA_URL, safeUrl)
+                putExtra(AudioPlaybackService.EXTRA_POSITION_MS, (positionSeconds.coerceAtLeast(0.0) * 1000.0).toLong())
+            }
+            return try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
+                else startService(intent)
+                true
+            } catch (_: Exception) { false }
+        }
+
+        @JavascriptInterface
+        fun onForeground(): Long {
+            if (!isTrustedPage()) return -1L
+            val position = AudioPlaybackService.currentPositionMs()
+            stopService(Intent(this@MainActivity, AudioPlaybackService::class.java))
+            return position
+        }
+
+        @JavascriptInterface
         fun onPause() {
             if (!isTrustedPage()) return
             stopService(Intent(this@MainActivity, AudioPlaybackService::class.java))
@@ -197,7 +222,35 @@ class MainActivity : ComponentActivity() {
                           document.addEventListener('pause', handleMediaPause, true);
                           document.addEventListener('ended', handleMediaEnded, true);
                           document.addEventListener('visibilitychange', function() {
-                            if (document.visibilityState === 'visible') notifyNativeStop();
+                            if (document.visibilityState === 'hidden') {
+                              var media = Array.prototype.find.call(
+                                document.querySelectorAll('audio,video'),
+                                function(el) { return !el.paused && !el.ended && el.currentSrc; }
+                              );
+                              if (media && window.MishkatNativeAudio) {
+                                var title = media.getAttribute('aria-label') ||
+                                  media.getAttribute('title') ||
+                                  document.title || 'مِشكاة';
+                                try {
+                                  var handedOff = window.MishkatNativeAudio.onBackground(
+                                    String(title).trim(), media.currentSrc, Number(media.currentTime || 0)
+                                  );
+                                  if (handedOff) media.pause();
+                                } catch (_) {}
+                              }
+                            } else {
+                              var media = document.querySelector('audio,video');
+                              if (media && window.MishkatNativeAudio) {
+                                try {
+                                  var resumedAt = Number(window.MishkatNativeAudio.onForeground());
+                                  if (resumedAt >= 0) {
+                                    media.currentTime = resumedAt / 1000;
+                                    media.play().catch(function() {});
+                                  }
+                                } catch (_) {}
+                              }
+                              notifyNativeStop();
+                            }
                           });
                         })();
                         """.trimIndent(),
