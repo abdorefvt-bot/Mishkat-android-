@@ -205,7 +205,7 @@ class MainActivity : ComponentActivity() {
                           }, true);
                           function notifyNativeStop() {
                             window.setTimeout(function() {
-                              if (!activeMedia() && window.MishkatNativeAudio) {
+                              if (document.visibilityState !== "hidden" && !activeMedia() && window.MishkatNativeAudio) {
                                 window.MishkatNativeAudio.onPause();
                               }
                             }, 220);
