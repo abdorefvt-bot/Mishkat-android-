@@ -87,7 +87,7 @@ class AudioPlaybackService : Service() {
             player.setOnPreparedListener {
                 if (positionMs > 0L) {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) it.seekTo(positionMs, MediaPlayer.SEEK_CLOSEST)
-                    else @Suppress("DEPRECATION") it.seekTo(positionMs.toInt())
+                    else it.seekTo(positionMs.toInt())
                 }
                 requestAudioFocus()
                 it.start()
