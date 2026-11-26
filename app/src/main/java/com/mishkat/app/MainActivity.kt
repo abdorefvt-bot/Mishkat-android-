@@ -39,7 +39,6 @@ class MainActivity : ComponentActivity() {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 2402)
             return
         }
-        requestExactAlarmAccess()
     }
 
     @SuppressLint("SetJavaScriptEnabled")
