@@ -380,7 +380,7 @@ class AudioPlaybackService : Service() {
         ).build()
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(applicationInfo.icon)
+            .setSmallIcon(R.drawable.ic_stat_mishkat)
             .setLargeIcon(artwork)
             .setContentTitle(currentTitle)
             .setContentText(currentArtist)
@@ -390,6 +390,7 @@ class AudioPlaybackService : Service() {
             .setOnlyAlertOnce(true)
             .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
             .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .addAction(previous)
             .addAction(playPause)
             .addAction(next)
@@ -452,7 +453,7 @@ class AudioPlaybackService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     companion object {
-        private const val CHANNEL_ID = "mishkat_media_playback"
+        private const val CHANNEL_ID = "mishkat_media_playback_v2"
         private const val NOTIFICATION_ID = 4701
 
         const val ACTION_PLAY = "com.mishkat.app.action.PLAY"
