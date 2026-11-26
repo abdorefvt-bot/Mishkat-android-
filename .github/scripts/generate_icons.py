@@ -11,7 +11,10 @@ RES = ROOT / "app/src/main/res"
 # Render every launcher size directly from the original vector.
 for density, size in {"mdpi":48,"hdpi":72,"xhdpi":96,"xxhdpi":144,"xxxhdpi":192}.items():
     png = cairosvg.svg2png(url=str(SVG), output_width=size, output_height=size)
-    square = Image.open(io.BytesIO(png)).convert("RGBA")
+    artwork = Image.open(io.BytesIO(png)).convert("RGBA")
+    # Match the adaptive icon background on legacy launchers too.
+    square = Image.new("RGBA", (size, size), (119, 26, 50, 255))
+    square.alpha_composite(artwork)
 
     square_out = RES / f"mipmap-{density}" / "ic_launcher.png"
     square_out.parent.mkdir(parents=True, exist_ok=True)
