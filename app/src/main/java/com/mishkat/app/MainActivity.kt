@@ -26,23 +26,29 @@ class MainActivity : ComponentActivity() {
 
     inner class NativeAudioBridge {
         @JavascriptInterface
-        fun onPlay(title: String?) {
+        fun onPlay(title: String?, artist: String?, portrait: String?) {
             if (!isTrustedPage()) return
             val intent = Intent(this@MainActivity, AudioPlaybackService::class.java).apply {
                 action = AudioPlaybackService.ACTION_PLAY
                 putExtra(AudioPlaybackService.EXTRA_TITLE, title?.take(160) ?: "مِشكاة")
+                putExtra(AudioPlaybackService.EXTRA_ARTIST, artist?.take(160) ?: "مِشكاة")
+                putExtra(AudioPlaybackService.EXTRA_ARTWORK_URL, portrait?.take(4096) ?: "")
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
-            else startService(intent)
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
+                else startService(intent)
+            } catch (_: Exception) { }
         }
 
         @JavascriptInterface
-        fun onBackground(title: String?, url: String?, positionSeconds: Double): Boolean {
+        fun onBackground(title: String?, url: String?, positionSeconds: Double, artist: String?, portrait: String?): Boolean {
             if (!isTrustedPage()) return false
             val safeUrl = url?.takeIf { it.startsWith("https://") && it.length <= 4096 } ?: return false
             val intent = Intent(this@MainActivity, AudioPlaybackService::class.java).apply {
                 action = AudioPlaybackService.ACTION_BACKGROUND
                 putExtra(AudioPlaybackService.EXTRA_TITLE, title?.take(160) ?: "مِشكاة")
+                putExtra(AudioPlaybackService.EXTRA_ARTIST, artist?.take(160) ?: "مِشكاة")
+                putExtra(AudioPlaybackService.EXTRA_ARTWORK_URL, portrait?.take(4096) ?: "")
                 putExtra(AudioPlaybackService.EXTRA_URL, safeUrl)
                 putExtra(AudioPlaybackService.EXTRA_POSITION_MS, (positionSeconds.coerceAtLeast(0.0) * 1000.0).toLong())
             }
@@ -63,6 +69,18 @@ class MainActivity : ComponentActivity() {
 
         @JavascriptInterface
         fun onPause() {
+            if (!isTrustedPage()) return
+            val intent = Intent(this@MainActivity, AudioPlaybackService::class.java).apply {
+                action = AudioPlaybackService.ACTION_MEDIA_PAUSE
+            }
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
+                else startService(intent)
+            } catch (_: Exception) { }
+        }
+
+        @JavascriptInterface
+        fun onStop() {
             if (!isTrustedPage()) return
             stopService(Intent(this@MainActivity, AudioPlaybackService::class.java))
         }
@@ -138,7 +156,6 @@ class MainActivity : ComponentActivity() {
             .isAppearanceLightStatusBars = false
 
         MishkatNotificationScheduler.createChannels(this)
-        // Rebuild persisted prayer and adhkar alarms on every app start.
         MishkatNotificationScheduler.restoreSchedules(this)
         MishkatNotificationScheduler.setAdhkarEnabled(this, true)
         requestNotificationAccess()
@@ -163,7 +180,6 @@ class MainActivity : ComponentActivity() {
                 javaScriptEnabled = true
                 domStorageEnabled = true
                 loadsImagesAutomatically = true
-                // Use the real device viewport so Framer selects the correct Phone/Tablet breakpoint.
                 useWideViewPort = true
                 loadWithOverviewMode = false
                 textZoom = 100
@@ -188,68 +204,96 @@ class MainActivity : ComponentActivity() {
                         (function() {
                           if (window.__mishkatNativeAudioHooked) return;
                           window.__mishkatNativeAudioHooked = true;
+
+                          function currentMeta(media) {
+                            var m = window.__mishkatNowPlaying || {};
+                            return {
+                              title: m.title || (media && (media.getAttribute('aria-label') || media.getAttribute('title'))) || document.title || 'تلاوة قرآنية',
+                              artist: m.artist || 'مِشكاة',
+                              portrait: m.portrait || ''
+                            };
+                          }
+
                           function activeMedia() {
-                            return Array.prototype.some.call(
+                            return Array.prototype.find.call(
                               document.querySelectorAll('audio,video'),
-                              function(el) { return !el.paused && !el.ended; }
+                              function(el) { return !el.paused && !el.ended && el.currentSrc; }
                             );
                           }
+
+                          function handoff(media) {
+                            if (!media || !media.currentSrc || !window.MishkatNativeAudio) return false;
+                            var m = currentMeta(media);
+                            return window.MishkatNativeAudio.onBackground(
+                              String(m.title).trim(), media.currentSrc, Number(media.currentTime || 0),
+                              String(m.artist), String(m.portrait)
+                            );
+                          }
+
+                          document.addEventListener('mishkat-audio-start', function(event) {
+                            var d = event.detail || {};
+                            window.__mishkatNowPlaying = {
+                              audio: d.audio || null,
+                              title: d.title || '',
+                              artist: d.artist || '',
+                              portrait: d.portrait || d.image || ''
+                            };
+                          }, true);
+
                           document.addEventListener('play', function(event) {
                             var el = event.target;
                             if (!(el instanceof HTMLMediaElement)) return;
-                            var title = el.getAttribute('aria-label') ||
-                              el.getAttribute('title') ||
-                              (el.closest('[data-framer-name]') && el.closest('[data-framer-name]').innerText) ||
-                              document.title || 'مِشكاة';
-                            if (window.MishkatNativeAudio) window.MishkatNativeAudio.onPlay(String(title).trim());
-                          }, true);
-                          function notifyNativeStop() {
                             window.setTimeout(function() {
-                              if (document.visibilityState !== "hidden" && !activeMedia() && window.MishkatNativeAudio) {
+                              var m = currentMeta(el);
+                              if (document.visibilityState === 'hidden') {
+                                handoff(el);
+                              } else if (window.MishkatNativeAudio) {
+                                window.MishkatNativeAudio.onPlay(String(m.title).trim(), String(m.artist), String(m.portrait));
+                              }
+                            }, 80);
+                          }, true);
+
+                          function notifyNativePause() {
+                            window.setTimeout(function() {
+                              if (document.visibilityState !== 'hidden' && !activeMedia() && window.MishkatNativeAudio) {
                                 window.MishkatNativeAudio.onPause();
                               }
                             }, 220);
                           }
-                          // Android may dispatch a media pause when the WebView moves to the background.
-                          // Keep the foreground media service alive in that case so playback can continue.
+
+                          function notifyNativeStop() {
+                            window.setTimeout(function() {
+                              if (document.visibilityState !== 'hidden' && !activeMedia() && window.MishkatNativeAudio) {
+                                window.MishkatNativeAudio.onStop();
+                              }
+                            }, 220);
+                          }
+
                           function handleMediaPause() {
                             if (document.visibilityState === 'hidden') return;
-                            notifyNativeStop();
+                            notifyNativePause();
                           }
-                          function handleMediaEnded() {
-                            notifyNativeStop();
-                          }
+
                           document.addEventListener('pause', handleMediaPause, true);
-                          document.addEventListener('ended', handleMediaEnded, true);
+                          document.addEventListener('ended', notifyNativeStop, true);
+
                           document.addEventListener('visibilitychange', function() {
                             if (document.visibilityState === 'hidden') {
-                              var media = Array.prototype.find.call(
-                                document.querySelectorAll('audio,video'),
-                                function(el) { return !el.paused && !el.ended && el.currentSrc; }
-                              );
-                              if (media && window.MishkatNativeAudio) {
-                                var title = media.getAttribute('aria-label') ||
-                                  media.getAttribute('title') ||
-                                  document.title || 'مِشكاة';
-                                try {
-                                  var handedOff = window.MishkatNativeAudio.onBackground(
-                                    String(title).trim(), media.currentSrc, Number(media.currentTime || 0)
-                                  );
-                                  if (handedOff) media.pause();
-                                } catch (_) {}
+                              var media = activeMedia();
+                              if (media) {
+                                handoff(media);
+                                media.pause();
                               }
                             } else {
-                              var media = document.querySelector('audio,video');
-                              if (media && window.MishkatNativeAudio) {
-                                try {
-                                  var resumedAt = Number(window.MishkatNativeAudio.onForeground());
-                                  if (resumedAt >= 0) {
-                                    media.currentTime = resumedAt / 1000;
-                                    media.play().catch(function() {});
-                                  }
-                                } catch (_) {}
+                              var resumedAt = Number(window.MishkatNativeAudio.onForeground());
+                              if (resumedAt >= 0) {
+                                var media = window.__mishkatRequestedAudio || document.querySelector('audio,video');
+                                if (media) {
+                                  media.currentTime = resumedAt / 1000;
+                                  media.play().catch(function() {});
+                                }
                               }
-                              notifyNativeStop();
+                              notifyNativePause();
                             }
                           });
                         })();
@@ -260,11 +304,31 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        AudioPlaybackService.nativeActionHandler = { action ->
+            runOnUiThread {
+                if (!::webView.isInitialized) return@runOnUiThread
+                val script = when {
+                    action == "next" || action == "previous" -> {
+                        val direction = if (action == "next") 1 else -1
+                        "(function(){var a=window.__mishkatRequestedAudio||window.__mishkatActiveAudio;if(a)window.dispatchEvent(new CustomEvent('mishkat-track-step',{detail:{audio:a,direction:$direction}}));})()"
+                    }
+                    action == "play" -> "(function(){var a=window.__mishkatRequestedAudio||window.__mishkatActiveAudio;if(a&&a.paused)a.play().catch(function(){});})()"
+                    action == "pause" -> "(function(){var a=window.__mishkatRequestedAudio||window.__mishkatActiveAudio;if(a&&!a.paused)a.pause();})()"
+                    action == "toggle" -> "(function(){var a=window.__mishkatRequestedAudio||window.__mishkatActiveAudio;if(a){if(a.paused)a.play().catch(function(){});else a.pause();}})()"
+                    action.startsWith("seek:") -> {
+                        val position = action.substringAfter("seek:").toLongOrNull()?.coerceAtLeast(0L) ?: 0L
+                        "(function(){var a=window.__mishkatRequestedAudio||window.__mishkatActiveAudio;if(a)a.currentTime=$position/1000;})()"
+                    }
+                    else -> ""
+                }
+                if (script.isNotBlank()) webView.evaluateJavascript(script, null)
+            }
+        }
+
         setContentView(webView)
         ViewCompat.requestApplyInsets(webView)
 
         if (savedInstanceState == null) {
-            // Refresh remote Framer assets once after an APK update without clearing localStorage.
             val cachePrefs = getSharedPreferences("mishkat_web_cache", MODE_PRIVATE)
             val installedVersion = packageManager.getPackageInfo(packageName, 0).versionCode.toLong()
             if (cachePrefs.getLong("version", -1L) != installedVersion) {
@@ -292,6 +356,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        AudioPlaybackService.nativeActionHandler = null
         if (::webView.isInitialized) {
             webView.stopLoading()
             webView.loadUrl("about:blank")

@@ -12,6 +12,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
+import org.json.JSONArray
 import org.json.JSONObject
 
 object MishkatNotificationScheduler {
@@ -19,7 +20,7 @@ object MishkatNotificationScheduler {
     private const val CHANNEL_REMINDERS = "mishkat_reminders"
     private const val ACTION_ADHAN = "com.mishkat.app.notification.ADHAN"
     private const val ACTION_MISSED = "com.mishkat.app.notification.MISSED"
-    const val ACTION_ADHKAR = "com.mishkat.app.notification.ADHKAR"
+    const val ACTION_CONTENT_REMINDER = "com.mishkat.app.notification.CONTENT_REMINDER"
 
     private val prayerNames = mapOf(
         "Fajr" to "الفجر",
@@ -27,15 +28,6 @@ object MishkatNotificationScheduler {
         "Asr" to "العصر",
         "Maghrib" to "المغرب",
         "Isha" to "العشاء"
-    )
-
-    private val adhkar = listOf(
-        "سبحان الله وبحمده",
-        "لا إله إلا الله",
-        "لا حول ولا قوة إلا بالله",
-        "اللهم صل وسلم على محمد",
-        "سبحان الله",
-        "أستغفر الله العظيم وأتوب إليه"
     )
 
     fun createChannels(context: Context) {
@@ -48,6 +40,7 @@ object MishkatNotificationScheduler {
             ).apply {
                 description = "تذكيرات الأذكار ومواقيت الصلاة ومتابعتها"
                 enableVibration(true)
+                setShowBadge(false)
             }
             manager.createNotificationChannel(reminders)
         }
@@ -57,9 +50,58 @@ object MishkatNotificationScheduler {
         prefs(context).edit().putBoolean("app_in_background", inBackground).apply()
     }
 
+    // Existing website bridge entry point; it now controls the unified
+    // two-hour alternating Quran/adhkar reminder cycle.
     fun setAdhkarEnabled(context: Context, enabled: Boolean) {
-        prefs(context).edit().putBoolean("adhkar_enabled", enabled).apply()
-        if (enabled) scheduleNextAdhkar(context) else cancel(context, ACTION_ADHKAR, "adhkar")
+        prefs(context).edit().putBoolean("content_reminders_enabled", enabled).apply()
+        cancel(context, ACTION_CONTENT_REMINDER, "content")
+        if (enabled) scheduleNextContentReminder(context)
+    }
+
+    fun scheduleNextContentReminder(context: Context) {
+        if (!prefs(context).getBoolean("content_reminders_enabled", true)) return
+        val next = Calendar.getInstance()
+        next.set(Calendar.MINUTE, 0)
+        next.set(Calendar.SECOND, 0)
+        next.set(Calendar.MILLISECOND, 0)
+        val currentHour = next.get(Calendar.HOUR_OF_DAY)
+        val nextEvenHour = ((currentHour / 2) + 1) * 2
+        next.add(Calendar.HOUR_OF_DAY, nextEvenHour - currentHour)
+        schedule(context, ACTION_CONTENT_REMINDER, "content", next.timeInMillis, "", "", "")
+    }
+
+    fun showContentReminder(context: Context) {
+        val p = prefs(context)
+        if (!p.getBoolean("content_reminders_enabled", true)) return
+        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        val verseSlot = hour % 4 == 0
+        val content = if (verseSlot) {
+            val verses = readTextItems(context, "verses.json")
+            if (verses.isEmpty()) return
+            val index = p.getInt("verse_index", 0) % verses.size
+            p.edit().putInt("verse_index", (index + 1) % verses.size).apply()
+            verses[index]
+        } else {
+            val adhkar = readTextItems(context, "adhkar.json")
+            if (adhkar.isEmpty()) return
+            val index = p.getInt("dhikr_index", 0) % adhkar.size
+            p.edit().putInt("dhikr_index", (index + 1) % adhkar.size).apply()
+            adhkar[index]
+        }
+        val id = (System.currentTimeMillis() / 1000L).toInt()
+        showContentNotification(context, id, content)
+    }
+
+    private fun readTextItems(context: Context, assetName: String): List<String> {
+        return try {
+            val raw = context.assets.open(assetName).bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val array = JSONArray(raw)
+            (0 until array.length()).mapNotNull { index ->
+                array.optJSONObject(index)?.optString("text")?.takeIf { it.isNotBlank() }
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
     }
 
     fun schedulePrayerDay(
@@ -151,19 +193,6 @@ object MishkatNotificationScheduler {
         }.timeInMillis
     }
 
-    fun scheduleNextAdhkar(context: Context) {
-        val p = prefs(context)
-        if (!p.getBoolean("adhkar_enabled", true)) return
-        val zone = TimeZone.getTimeZone(p.getString("time_zone", "Africa/Cairo"))
-        val next = Calendar.getInstance(zone)
-        val minute = next.get(Calendar.MINUTE)
-        next.set(Calendar.MINUTE, if (minute < 30) 30 else 0)
-        if (minute >= 30) next.add(Calendar.HOUR_OF_DAY, 1)
-        next.set(Calendar.SECOND, 0)
-        next.set(Calendar.MILLISECOND, 0)
-        schedule(context, ACTION_ADHKAR, "adhkar", next.timeInMillis, "", "", "")
-    }
-
     fun setTimeZone(context: Context, timeZoneId: String) {
         prefs(context).edit().putString("time_zone", timeZoneId).apply()
     }
@@ -186,17 +215,9 @@ object MishkatNotificationScheduler {
             } catch (_: Exception) { }
         }
         p.edit().putStringSet("scheduled_dates", keep).apply()
-        if (p.getBoolean("adhkar_enabled", true)) scheduleNextAdhkar(context)
-    }
-
-    fun showAdhkarIfBackground(context: Context) {
-        val p = prefs(context)
-        if (p.getBoolean("app_in_background", true)) {
-            val zone = TimeZone.getTimeZone(p.getString("time_zone", "Africa/Cairo"))
-            val now = Calendar.getInstance(zone)
-            val index = (now.get(Calendar.HOUR_OF_DAY) * 2 + if (now.get(Calendar.MINUTE) >= 30) 1 else 0) % adhkar.size
-            show(context, 3200 + index, "", adhkar[index])
-        }
+        // Cancel any one-time alarm from the previous 30-minute reminder system.
+        cancel(context, "com.mishkat.app.notification.ADHKAR", "adhkar")
+        if (p.getBoolean("content_reminders_enabled", true)) scheduleNextContentReminder(context)
     }
 
     fun showPrayerIfBackground(context: Context, action: String, date: String, key: String, label: String) {
@@ -212,8 +233,28 @@ object MishkatNotificationScheduler {
         prefs(context).edit().putBoolean("completed_$date-$key", completed).apply()
     }
 
-    private fun cancelNotification(context: Context, id: Int) {
-        context.getSystemService(NotificationManager::class.java).cancel(id)
+    private fun showContentNotification(context: Context, id: Int, text: String) {
+        createChannels(context)
+        val launch = context.packageManager.getLaunchIntentForPackage(context.packageName)
+        val contentIntent = launch?.let {
+            PendingIntent.getActivity(
+                context, id, it,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        }
+        val notification = NotificationCompat.Builder(context, CHANNEL_REMINDERS)
+            .setSmallIcon(context.applicationInfo.icon)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setContentIntent(contentIntent)
+            .setAutoCancel(true)
+            .setOnlyAlertOnce(true)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .build()
+        try {
+            context.getSystemService(NotificationManager::class.java).notify(id, notification)
+        } catch (_: SecurityException) { }
     }
 
     private fun show(context: Context, id: Int, title: String, body: String) {
@@ -289,6 +330,10 @@ object MishkatNotificationScheduler {
         )
         context.getSystemService(AlarmManager::class.java).cancel(pending)
         pending.cancel()
+    }
+
+    private fun cancelNotification(context: Context, id: Int) {
+        context.getSystemService(NotificationManager::class.java).cancel(id)
     }
 
     private fun prefs(context: Context) =

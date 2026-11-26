@@ -20,9 +20,9 @@ class MishkatNotificationReceiver : BroadcastReceiver() {
                 }
                 MishkatNotificationScheduler.showPrayerIfBackground(context, action, date, key, label)
             }
-            MishkatNotificationScheduler.ACTION_ADHKAR -> {
-                MishkatNotificationScheduler.showAdhkarIfBackground(context)
-                MishkatNotificationScheduler.scheduleNextAdhkar(context)
+            MishkatNotificationScheduler.ACTION_CONTENT_REMINDER -> {
+                MishkatNotificationScheduler.showContentReminder(context)
+                MishkatNotificationScheduler.scheduleNextContentReminder(context)
             }
         }
     }

@@ -2,20 +2,30 @@ from pathlib import Path
 import io
 import xml.etree.ElementTree as ET
 import cairosvg
-from PIL import Image
+from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[2]
 SVG = ROOT / ".github/assets/mishkat_logo.svg"
 RES = ROOT / "app/src/main/res"
 
-# Legacy launcher icons for launchers that do not use adaptive icons.
+# Render every launcher size directly from the original vector.
 for density, size in {"mdpi":48,"hdpi":72,"xhdpi":96,"xxhdpi":144,"xxxhdpi":192}.items():
-    for name in ("ic_launcher.png", "ic_launcher_round.png"):
-        out = RES / f"mipmap-{density}" / name
-        out.parent.mkdir(parents=True, exist_ok=True)
-        cairosvg.svg2png(url=str(SVG), write_to=str(out), output_width=size, output_height=size)
+    png = cairosvg.svg2png(url=str(SVG), output_width=size, output_height=size)
+    square = Image.open(io.BytesIO(png)).convert("RGBA")
 
-# Adaptive foreground: remove both full-bleed SVG background rectangles.
+    square_out = RES / f"mipmap-{density}" / "ic_launcher.png"
+    square_out.parent.mkdir(parents=True, exist_ok=True)
+    square.save(square_out)
+
+    # Older launchers use this pre-masked round icon instead of adaptive masks.
+    round_icon = square.copy()
+    mask = Image.new("L", (size, size), 0)
+    ImageDraw.Draw(mask).ellipse((0, 0, size - 1, size - 1), fill=255)
+    round_icon.putalpha(mask)
+    round_out = RES / f"mipmap-{density}" / "ic_launcher_round.png"
+    round_icon.save(round_out)
+
+# Adaptive foreground: remove the full-bleed SVG background rectangles.
 tree = ET.parse(SVG)
 root = tree.getroot()
 for node in list(root):
@@ -26,10 +36,9 @@ tmp = ROOT / "build" / "mishkat_foreground.svg"
 tmp.parent.mkdir(parents=True, exist_ok=True)
 tree.write(tmp, encoding="utf-8", xml_declaration=True)
 
-# Android's adaptive-icon safe zone is approximately the central 66% of the canvas.
-# Keep the complete Arabic wordmark inside it so different launcher masks cannot crop it.
-art_size = 270
-canvas_size = 432
+# High-resolution adaptive foreground; artwork remains inside Android's safe zone.
+art_size = 540
+canvas_size = 864
 png = cairosvg.svg2png(url=str(tmp), output_width=art_size, output_height=art_size)
 art = Image.open(io.BytesIO(png)).convert("RGBA")
 canvas = Image.new("RGBA", (canvas_size, canvas_size), (0, 0, 0, 0))
