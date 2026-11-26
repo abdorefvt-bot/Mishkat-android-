@@ -31,7 +31,7 @@ class MainActivity : ComponentActivity() {
             val intent = Intent(this@MainActivity, AudioPlaybackService::class.java).apply {
                 action = AudioPlaybackService.ACTION_PLAY
                 putExtra(AudioPlaybackService.EXTRA_TITLE, title?.take(160) ?: "مِشكاة")
-                putExtra(AudioPlaybackService.EXTRA_ARTIST, artist?.take(160) ?: "مِشكاة")
+                putExtra(AudioPlaybackService.EXTRA_ARTIST, artist?.take(160) ?: "القرآن الكريم")
                 putExtra(AudioPlaybackService.EXTRA_ARTWORK_URL, portrait?.take(4096) ?: "")
             }
             try {
@@ -47,7 +47,7 @@ class MainActivity : ComponentActivity() {
             val intent = Intent(this@MainActivity, AudioPlaybackService::class.java).apply {
                 action = AudioPlaybackService.ACTION_BACKGROUND
                 putExtra(AudioPlaybackService.EXTRA_TITLE, title?.take(160) ?: "مِشكاة")
-                putExtra(AudioPlaybackService.EXTRA_ARTIST, artist?.take(160) ?: "مِشكاة")
+                putExtra(AudioPlaybackService.EXTRA_ARTIST, artist?.take(160) ?: "القرآن الكريم")
                 putExtra(AudioPlaybackService.EXTRA_ARTWORK_URL, portrait?.take(4096) ?: "")
                 putExtra(AudioPlaybackService.EXTRA_URL, safeUrl)
                 putExtra(AudioPlaybackService.EXTRA_POSITION_MS, (positionSeconds.coerceAtLeast(0.0) * 1000.0).toLong())
@@ -209,12 +209,14 @@ class MainActivity : ComponentActivity() {
                             var m = window.__mishkatNowPlaying || {};
                             return {
                               title: m.title || (media && (media.getAttribute('aria-label') || media.getAttribute('title'))) || document.title || 'تلاوة قرآنية',
-                              artist: m.artist || 'مِشكاة',
+                              artist: m.artist || 'القرآن الكريم',
                               portrait: m.portrait || ''
                             };
                           }
 
                           function activeMedia() {
+                            var requested = window.__mishkatRequestedAudio || window.__mishkatActiveAudio;
+                            if (requested && !requested.paused && !requested.ended && requested.currentSrc) return requested;
                             return Array.prototype.find.call(
                               document.querySelectorAll('audio,video'),
                               function(el) { return !el.paused && !el.ended && el.currentSrc; }
@@ -280,8 +282,9 @@ class MainActivity : ComponentActivity() {
                           document.addEventListener('visibilitychange', function() {
                             if (document.visibilityState === 'hidden') {
                               var media = activeMedia();
-                              if (media) {
-                                handoff(media);
+                              if (media && handoff(media)) {
+                                // Pause the WebView copy only after Android accepted the
+                                // native background handoff, avoiding an accidental cutoff.
                                 media.pause();
                               }
                             } else {
