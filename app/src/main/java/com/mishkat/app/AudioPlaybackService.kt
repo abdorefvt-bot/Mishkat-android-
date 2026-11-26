@@ -35,7 +35,7 @@ class AudioPlaybackService : Service() {
     private var audioManager: AudioManager? = null
     private var audioFocusRequest: AudioFocusRequest? = null
     private var currentTitle = "تلاوة قرآنية"
-    private var currentArtist = "مِشكاة"
+    private var currentArtist = "القرآن الكريم"
     private var artworkUrl: String? = null
     private var artwork: Bitmap? = null
     private var foregroundStarted = false
@@ -289,7 +289,7 @@ class AudioPlaybackService : Service() {
         val builder = MediaMetadataCompat.Builder()
             .putString(MediaMetadataCompat.METADATA_KEY_TITLE, currentTitle)
             .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, currentArtist)
-            .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, "مِشكاة")
+            .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, "القرآن الكريم")
             .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, durationMs)
         artwork?.let { builder.putBitmap(MediaMetadataCompat.METADATA_KEY_ART, it) }
         mediaSession?.setMetadata(builder.build())
