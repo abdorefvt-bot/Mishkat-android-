@@ -1,8 +1,8 @@
-name: Build Mishkat Clean APK
+name: Build Mishkat Fresh APK
 on:
   workflow_dispatch:
   push:
-    branches: [ "main", "clean-rebuild-3.0" ]
+    branches: [ "fresh-mishkat-2026" ]
 permissions:
   contents: read
 jobs:
@@ -17,20 +17,18 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
-      - name: Generate launcher icons from original SVG
+      - name: Generate high-resolution launcher icons from original SVG
         run: |
           python3 -m pip install --user cairosvg pillow
           python3 .github/scripts/generate_icons.py
-      - name: Decode bundled Quran fonts
-        run: python3 .github/scripts/decode_widget_fonts.py
-      - name: Build clean debug APK
+      - name: Build fresh debug APK
         run: gradle --no-daemon clean assembleDebug
-      - name: Verify APK package and version
+      - name: Verify APK
         run: |
           test -s app/build/outputs/apk/debug/app-debug.apk
           ls -lh app/build/outputs/apk/debug/app-debug.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: Mishkat-Clean-v3.0-APK
+          name: Mishkat-Fresh-v1.0.0-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
