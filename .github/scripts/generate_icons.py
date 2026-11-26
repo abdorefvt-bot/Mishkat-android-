@@ -59,8 +59,8 @@ def append_node(parent, node, inherited_fill="#ffffff", inherited_opacity="1"):
         attrs = {}
         transform = node.attrib.get("transform", "")
         if transform:
-            m = re.fullmatch(r"translate\\(\\s*([-+0-9.eE]+)(?:[, ]+([-+0-9.eE]+))?\\s*\\)", transform)
-            mx = re.fullmatch(r"matrix\\(\\s*([-+0-9.eE]+)[, ]+([-+0-9.eE]+)[, ]+([-+0-9.eE]+)[, ]+([-+0-9.eE]+)[, ]+([-+0-9.eE]+)[, ]+([-+0-9.eE]+)\\s*\\)", transform)
+            m = re.fullmatch(r"translate\(\s*([-+0-9.eE]+)(?:[, ]+([-+0-9.eE]+))?\s*\)", transform)
+            mx = re.fullmatch(r"matrix\(\s*([-+0-9.eE]+)[, ]+([-+0-9.eE]+)[, ]+([-+0-9.eE]+)[, ]+([-+0-9.eE]+)[, ]+([-+0-9.eE]+)[, ]+([-+0-9.eE]+)\s*\)", transform)
             if m:
                 attrs[A+"translateX"] = m.group(1)
                 attrs[A+"translateY"] = m.group(2) or "0"
@@ -72,7 +72,7 @@ def append_node(parent, node, inherited_fill="#ffffff", inherited_opacity="1"):
         group = ET.SubElement(parent, "group", attrs)
         clip = node.attrib.get("clip-path", "")
         if clip:
-            match = re.search(r"url\\(#([^)]+)\\)", clip)
+            match = re.search(r"url\(#([^)]+)\)", clip)
             if not match or match.group(1) not in defs:
                 raise ValueError(f"Unsupported SVG clip path: {clip}")
             clip_def = defs[match.group(1)]
