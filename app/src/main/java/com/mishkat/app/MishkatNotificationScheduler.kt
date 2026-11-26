@@ -9,6 +9,7 @@ import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import org.json.JSONArray
+import org.json.JSONObject
 
 object MishkatNotificationScheduler {
     private const val PREFS = "mishkat_notifications"
@@ -26,6 +27,51 @@ object MishkatNotificationScheduler {
             }
             context.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
+    }
+
+    fun setAppInBackground(context: Context, inBackground: Boolean) {
+        prefs(context).edit().putBoolean("app_in_background", inBackground).apply()
+    }
+
+    // Prayer times and completion data are mirrored for compatibility with the Framer page.
+    // This deliberately does not create adhan or missed-prayer notifications.
+    fun setTimeZone(context: Context, timeZoneId: String) {
+        prefs(context).edit().putString("time_zone", timeZoneId).apply()
+    }
+
+    fun schedulePrayerDay(context: Context, date: String, timeZoneId: String, timesJson: String, completedJson: String) {
+        val times = try { JSONObject(timesJson) } catch (_: Exception) { return }
+        val completed = try { JSONObject(completedJson) } catch (_: Exception) { JSONObject() }
+        val day = JSONObject().apply {
+            put("date", date)
+            put("timeZone", timeZoneId)
+            put("times", times)
+            put("completed", completed)
+        }
+        val p = prefs(context)
+        p.edit().putString("time_zone", timeZoneId).putString("day_$date", day.toString()).apply()
+        val dates = (p.getStringSet("saved_prayer_dates", emptySet()) ?: emptySet()).toMutableSet()
+        dates.add(date)
+        p.edit().putStringSet("saved_prayer_dates", dates).apply()
+        for (prayer in listOf("Fajr", "Dhuhr", "Asr", "Maghrib", "Isha")) {
+            p.edit().putBoolean("completed_$date-$prayer", completed.optBoolean(prayer, false)).apply()
+        }
+    }
+
+    fun updatePrayerStatuses(context: Context, date: String, completedJson: String) {
+        val p = prefs(context)
+        val completed = try { JSONObject(completedJson) } catch (_: Exception) { return }
+        val raw = p.getString("day_$date", null)
+        val day = try { if (raw.isNullOrBlank()) JSONObject() else JSONObject(raw) } catch (_: Exception) { JSONObject() }
+        day.put("date", date)
+        day.put("completed", completed)
+        p.edit().putString("day_$date", day.toString()).apply()
+        for (prayer in listOf("Fajr", "Dhuhr", "Asr", "Maghrib", "Isha")) {
+            p.edit().putBoolean("completed_$date-$prayer", completed.optBoolean(prayer, false)).apply()
+        }
+        val dates = (p.getStringSet("saved_prayer_dates", emptySet()) ?: emptySet()).toMutableSet()
+        dates.add(date)
+        p.edit().putStringSet("saved_prayer_dates", dates).apply()
     }
 
     fun setAdhkarEnabled(context: Context, enabled: Boolean) {
@@ -87,8 +133,8 @@ object MishkatNotificationScheduler {
     fun restoreSchedules(context: Context) {
         // Remove prayer-time and missed-prayer alarms left by older versions.
         val p = prefs(context)
-        val dates = p.getStringSet("scheduled_dates", emptySet()) ?: emptySet()
-        for (date in dates) {
+        val legacyDates = p.getStringSet("scheduled_dates", emptySet()) ?: emptySet()
+        for (date in legacyDates) {
             for (prayer in listOf("Fajr", "Dhuhr", "Asr", "Maghrib", "Isha")) {
                 cancel(context, ACTION_ADHAN, "$date-$prayer")
                 cancel(context, ACTION_MISSED, "$date-$prayer")
@@ -96,9 +142,8 @@ object MishkatNotificationScheduler {
                 manager.cancel(("$date-$prayer-$ACTION_ADHAN").hashCode())
                 manager.cancel(("$date-$prayer-$ACTION_MISSED").hashCode())
             }
-            p.edit().remove("day_$date").apply()
         }
-        p.edit().remove("scheduled_dates").apply()
+        // Keep saved day_$date and completion data; only retire old prayer alarms.
         cancel(context, "com.mishkat.app.notification.ADHKAR", "adhkar")
         if (p.getBoolean("content_reminders_enabled", true)) scheduleNextContentReminder(context)
     }

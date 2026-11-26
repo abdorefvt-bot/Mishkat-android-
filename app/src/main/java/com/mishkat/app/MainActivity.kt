@@ -21,17 +21,39 @@ import androidx.core.view.WindowInsetsCompat
 class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
 
+    inner class NativeAudioBridge {
+        @JavascriptInterface
+        fun onPlay(title: String?) {
+            if (!isTrustedPage()) return
+            val intent = Intent(this@MainActivity, AudioPlaybackService::class.java).apply {
+                action = AudioPlaybackService.ACTION_PLAY
+                putExtra(AudioPlaybackService.EXTRA_TITLE, title?.take(160) ?: "مِشكاة")
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
+            else startService(intent)
+        }
+
+        @JavascriptInterface
+        fun onPause() {
+            if (!isTrustedPage()) return
+            stopService(Intent(this@MainActivity, AudioPlaybackService::class.java))
+        }
+    }
+
     inner class NativeNotificationsBridge {
-        // Keep the legacy prayer callbacks available to the Framer page.
-        // Prayer notifications are intentionally disabled; these are compatibility no-ops.
         @JavascriptInterface
         fun schedulePrayerDay(date: String, timeZone: String, timesJson: String, completedJson: String) {
             if (!isTrustedPage()) return
+            MishkatNotificationScheduler.setTimeZone(this@MainActivity, timeZone)
+            MishkatNotificationScheduler.schedulePrayerDay(
+                this@MainActivity, date, timeZone, timesJson, completedJson
+            )
         }
 
         @JavascriptInterface
         fun updatePrayerStatuses(date: String, completedJson: String) {
             if (!isTrustedPage()) return
+            MishkatNotificationScheduler.updatePrayerStatuses(this@MainActivity, date, completedJson)
         }
 
         @JavascriptInterface
@@ -49,7 +71,6 @@ class MainActivity : ComponentActivity() {
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 2402)
-            return
         }
     }
 
@@ -99,12 +120,56 @@ class MainActivity : ComponentActivity() {
                 mediaPlaybackRequiresUserGesture = false
             }
 
+            addJavascriptInterface(NativeAudioBridge(), "MishkatNativeAudio")
             addJavascriptInterface(NativeNotificationsBridge(), "MishkatNativeNotifications")
             webChromeClient = WebChromeClient()
             webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView, url: String) {
                     super.onPageFinished(view, url)
                     if (!url.startsWith("https://mishkatt.framer.website")) return
+                    view.evaluateJavascript(
+                        """
+                        (function() {
+                          if (window.__mishkatNativeAudioHooked) return;
+                          window.__mishkatNativeAudioHooked = true;
+                          function activeMedia() {
+                            return Array.prototype.some.call(
+                              document.querySelectorAll('audio,video'),
+                              function(el) { return !el.paused && !el.ended; }
+                            );
+                          }
+                          document.addEventListener('play', function(event) {
+                            var el = event.target;
+                            if (!(el instanceof HTMLMediaElement)) return;
+                            var title = el.getAttribute('aria-label') ||
+                              el.getAttribute('title') ||
+                              (el.closest('[data-framer-name]') && el.closest('[data-framer-name]').innerText) ||
+                              document.title || 'مِشكاة';
+                            if (window.MishkatNativeAudio) window.MishkatNativeAudio.onPlay(String(title).trim());
+                          }, true);
+                          function notifyNativeStop() {
+                            window.setTimeout(function() {
+                              if (!activeMedia() && window.MishkatNativeAudio) {
+                                window.MishkatNativeAudio.onPause();
+                              }
+                            }, 220);
+                          }
+                          function handleMediaPause() {
+                            if (document.visibilityState === 'hidden') return;
+                            notifyNativeStop();
+                          }
+                          function handleMediaEnded() {
+                            notifyNativeStop();
+                          }
+                          document.addEventListener('pause', handleMediaPause, true);
+                          document.addEventListener('ended', handleMediaEnded, true);
+                          document.addEventListener('visibilitychange', function() {
+                            if (document.visibilityState === 'visible') notifyNativeStop();
+                          });
+                        })();
+                        """.trimIndent(),
+                        null
+                    )
                 }
             }
         }
@@ -125,9 +190,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        MishkatNotificationScheduler.restoreSchedules(this)
+        MishkatNotificationScheduler.setAppInBackground(this, false)
     }
 
     override fun onPause() {
+        MishkatNotificationScheduler.setAppInBackground(this, true)
         super.onPause()
     }
 

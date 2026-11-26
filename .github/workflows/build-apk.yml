@@ -1,9 +1,8 @@
-# Build trigger: alternating Quran/adhkar reminders, native media controls, and high-resolution SVG launcher assets.
-name: Build Mishkat APK
+name: Build Mishkat Clean APK
 on:
   workflow_dispatch:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "clean-rebuild-3.0" ]
 permissions:
   contents: read
 jobs:
@@ -18,16 +17,20 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
-      - name: Generate launcher icons from original Canva SVG
+      - name: Generate launcher icons from original SVG
         run: |
           python3 -m pip install --user cairosvg pillow
           python3 .github/scripts/generate_icons.py
-      - name: Decode bundled widget fonts
+      - name: Decode bundled Quran fonts
         run: python3 .github/scripts/decode_widget_fonts.py
-      - name: Build debug APK
-        run: gradle assembleDebug
+      - name: Build clean debug APK
+        run: gradle --no-daemon clean assembleDebug
+      - name: Verify APK package and version
+        run: |
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          ls -lh app/build/outputs/apk/debug/app-debug.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: Mishkat-debug-apk
+          name: Mishkat-Clean-v3.0-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
