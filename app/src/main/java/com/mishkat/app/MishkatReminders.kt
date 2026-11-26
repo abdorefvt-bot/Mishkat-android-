@@ -47,10 +47,8 @@ object MishkatReminders {
         val list = readList(context, if (verse) "verses.json" else "adhkar.json")
         if (list.isNotEmpty()) {
             val item = list[itemIndex % list.size]
-            val title = if (verse) "آية قرآنية" else "ذِكر"
             val builder = NotificationCompat.Builder(context, CHANNEL)
                 .setSmallIcon(R.drawable.ic_stat_mishkat)
-                .setContentTitle(title)
                 .setContentText(item)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(item))
                 .setAutoCancel(true)
