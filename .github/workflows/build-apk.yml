@@ -1,3 +1,4 @@
+# Build trigger: alternating Quran/adhkar reminders, native media controls, and high-resolution SVG launcher assets.
 name: Build Mishkat APK
 on:
   workflow_dispatch:
