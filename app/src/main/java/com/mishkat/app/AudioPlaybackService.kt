@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.AudioAttributes
@@ -449,6 +450,9 @@ class AudioPlaybackService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     companion object {
+        private const val CHANNEL_ID = "mishkat_media_playback"
+        private const val NOTIFICATION_ID = 4701
+
         const val ACTION_PLAY = "com.mishkat.app.action.PLAY"
         const val ACTION_BACKGROUND = "com.mishkat.app.action.BACKGROUND"
         const val ACTION_MEDIA_PLAY_PAUSE = "com.mishkat.app.action.MEDIA_PLAY_PAUSE"
