@@ -276,7 +276,7 @@ object MishkatNotificationScheduler {
             )
         }
         val notification = NotificationCompat.Builder(context, CHANNEL_REMINDERS)
-            .setSmallIcon(context.applicationInfo.icon)
+            .setSmallIcon(R.drawable.ic_stat_mishkat)
             .setContentTitle(title.takeIf { it.isNotBlank() })
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
