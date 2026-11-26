@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
- android:description="@string/widget_description_mishkat" android:initialLayout="@layout/widget_verse"
- android:label="@string/widget_label_mishkat" android:minHeight="110dp" android:minWidth="250dp"
- android:resizeMode="none" android:targetCellHeight="2" android:targetCellWidth="4"
- android:updatePeriodMillis="0" android:widgetCategory="home_screen"/>
