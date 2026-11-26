@@ -53,28 +53,37 @@ object MishkatNotificationScheduler {
     // Existing website bridge entry point; it now controls the unified
     // two-hour alternating Quran/adhkar reminder cycle.
     fun setAdhkarEnabled(context: Context, enabled: Boolean) {
-        prefs(context).edit().putBoolean("content_reminders_enabled", enabled).apply()
-        cancel(context, ACTION_CONTENT_REMINDER, "content")
-        if (enabled) scheduleNextContentReminder(context)
+        val p = prefs(context)
+        val wasEnabled = p.getBoolean("content_reminders_enabled", false)
+        p.edit().putBoolean("content_reminders_enabled", enabled).apply()
+        if (!enabled) {
+            cancel(context, ACTION_CONTENT_REMINDER, "content")
+            p.edit().remove("next_content_reminder_at").apply()
+        } else if (!wasEnabled || p.getLong("next_content_reminder_at", 0L) <= System.currentTimeMillis()) {
+            scheduleNextContentReminder(context)
+        } else {
+            scheduleNextContentReminder(context)
+        }
     }
 
     fun scheduleNextContentReminder(context: Context) {
-        if (!prefs(context).getBoolean("content_reminders_enabled", true)) return
-        val next = Calendar.getInstance()
-        next.set(Calendar.MINUTE, 0)
-        next.set(Calendar.SECOND, 0)
-        next.set(Calendar.MILLISECOND, 0)
-        val currentHour = next.get(Calendar.HOUR_OF_DAY)
-        val nextEvenHour = ((currentHour / 2) + 1) * 2
-        next.add(Calendar.HOUR_OF_DAY, nextEvenHour - currentHour)
-        schedule(context, ACTION_CONTENT_REMINDER, "content", next.timeInMillis, "", "", "")
+        val p = prefs(context)
+        if (!p.getBoolean("content_reminders_enabled", true)) return
+        val now = System.currentTimeMillis()
+        var nextAt = p.getLong("next_content_reminder_at", 0L)
+        if (nextAt <= now) {
+            nextAt = now + 2L * 60L * 60L * 1000L
+            p.edit().putLong("next_content_reminder_at", nextAt).apply()
+        }
+        schedule(context, ACTION_CONTENT_REMINDER, "content", nextAt, "", "", "")
     }
 
     fun showContentReminder(context: Context) {
         val p = prefs(context)
         if (!p.getBoolean("content_reminders_enabled", true)) return
-        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-        val verseSlot = hour % 4 == 0
+        val sequence = p.getInt("content_sequence", 0)
+        val verseSlot = sequence % 2 == 0
+        p.edit().putInt("content_sequence", sequence + 1).apply()
         val content = if (verseSlot) {
             val verses = readTextItems(context, "verses.json")
             if (verses.isEmpty()) return
@@ -243,7 +252,7 @@ object MishkatNotificationScheduler {
             )
         }
         val notification = NotificationCompat.Builder(context, CHANNEL_REMINDERS)
-            .setSmallIcon(context.applicationInfo.icon)
+            .setSmallIcon(R.drawable.ic_stat_mishkat)
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setContentIntent(contentIntent)
