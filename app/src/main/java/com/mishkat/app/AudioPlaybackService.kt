@@ -126,10 +126,12 @@ class AudioPlaybackService : Service() {
                     updateNotification()
                 }
             }
-            ACTION_MEDIA_PLAY -> {
-                if (backgroundPlayer != null) resumePlayer() else {
+            ACTION_PLAY, ACTION_MEDIA_PLAY -> {
+                if (backgroundPlayer != null) {
+                    resumePlayer()
+                } else {
                     pagePlaying = true
-                    nativeActionHandler?.invoke("play")
+                    mediaSession?.isActive = true
                     startInForeground()
                     updatePlaybackState(PlaybackStateCompat.STATE_PLAYING)
                     updateNotification()
