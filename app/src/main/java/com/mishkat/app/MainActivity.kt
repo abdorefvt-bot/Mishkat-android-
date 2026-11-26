@@ -2,14 +2,11 @@ package com.mishkat.app
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.app.AlarmManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
 import android.webkit.JavascriptInterface
 import android.view.View
 import android.webkit.WebChromeClient
@@ -24,84 +21,7 @@ import androidx.core.view.WindowInsetsCompat
 class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
 
-    inner class NativeAudioBridge {
-        @JavascriptInterface
-        fun onPlay(title: String?, artist: String?, portrait: String?) {
-            if (!isTrustedPage()) return
-            val intent = Intent(this@MainActivity, AudioPlaybackService::class.java).apply {
-                action = AudioPlaybackService.ACTION_PLAY
-                putExtra(AudioPlaybackService.EXTRA_TITLE, title?.take(160) ?: "مِشكاة")
-                putExtra(AudioPlaybackService.EXTRA_ARTIST, artist?.take(160) ?: "القرآن الكريم")
-                putExtra(AudioPlaybackService.EXTRA_ARTWORK_URL, portrait?.take(4096) ?: "")
-            }
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
-                else startService(intent)
-            } catch (_: Exception) { }
-        }
-
-        @JavascriptInterface
-        fun onBackground(title: String?, url: String?, positionSeconds: Double, artist: String?, portrait: String?): Boolean {
-            if (!isTrustedPage()) return false
-            val safeUrl = url?.takeIf { it.startsWith("https://") && it.length <= 4096 } ?: return false
-            val intent = Intent(this@MainActivity, AudioPlaybackService::class.java).apply {
-                action = AudioPlaybackService.ACTION_BACKGROUND
-                putExtra(AudioPlaybackService.EXTRA_TITLE, title?.take(160) ?: "مِشكاة")
-                putExtra(AudioPlaybackService.EXTRA_ARTIST, artist?.take(160) ?: "القرآن الكريم")
-                putExtra(AudioPlaybackService.EXTRA_ARTWORK_URL, portrait?.take(4096) ?: "")
-                putExtra(AudioPlaybackService.EXTRA_URL, safeUrl)
-                putExtra(AudioPlaybackService.EXTRA_POSITION_MS, (positionSeconds.coerceAtLeast(0.0) * 1000.0).toLong())
-            }
-            return try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
-                else startService(intent)
-                true
-            } catch (_: Exception) { false }
-        }
-
-        @JavascriptInterface
-        fun onForeground(): Long {
-            if (!isTrustedPage()) return -1L
-            val position = AudioPlaybackService.currentPositionMs()
-            stopService(Intent(this@MainActivity, AudioPlaybackService::class.java))
-            return position
-        }
-
-        @JavascriptInterface
-        fun onPause() {
-            if (!isTrustedPage()) return
-            val intent = Intent(this@MainActivity, AudioPlaybackService::class.java).apply {
-                action = AudioPlaybackService.ACTION_MEDIA_PAUSE
-            }
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
-                else startService(intent)
-            } catch (_: Exception) { }
-        }
-
-        @JavascriptInterface
-        fun onStop() {
-            if (!isTrustedPage()) return
-            stopService(Intent(this@MainActivity, AudioPlaybackService::class.java))
-        }
-    }
-
     inner class NativeNotificationsBridge {
-        @JavascriptInterface
-        fun schedulePrayerDay(date: String, timeZone: String, timesJson: String, completedJson: String) {
-            if (!isTrustedPage()) return
-            MishkatNotificationScheduler.setTimeZone(this@MainActivity, timeZone)
-            MishkatNotificationScheduler.schedulePrayerDay(
-                this@MainActivity, date, timeZone, timesJson, completedJson
-            )
-        }
-
-        @JavascriptInterface
-        fun updatePrayerStatuses(date: String, completedJson: String) {
-            if (!isTrustedPage()) return
-            MishkatNotificationScheduler.updatePrayerStatuses(this@MainActivity, date, completedJson)
-        }
-
         @JavascriptInterface
         fun setAdhkarNotifications(enabled: Boolean) {
             if (!isTrustedPage()) return
@@ -120,30 +40,6 @@ class MainActivity : ComponentActivity() {
             return
         }
         requestExactAlarmAccess()
-    }
-
-    private fun requestExactAlarmAccess() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val alarmManager = getSystemService(AlarmManager::class.java)
-            val prefs = getSharedPreferences("mishkat_notifications", MODE_PRIVATE)
-            if (!alarmManager.canScheduleExactAlarms() && !prefs.getBoolean("exact_alarm_prompted", false)) {
-                prefs.edit().putBoolean("exact_alarm_prompted", true).apply()
-                try {
-                    startActivity(
-                        Intent(
-                            Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
-                            Uri.parse("package:$packageName")
-                        )
-                    )
-                } catch (_: Exception) { }
-            }
-        }
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 2402) requestExactAlarmAccess()
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -192,139 +88,13 @@ class MainActivity : ComponentActivity() {
                 mediaPlaybackRequiresUserGesture = false
             }
 
-            addJavascriptInterface(NativeAudioBridge(), "MishkatNativeAudio")
             addJavascriptInterface(NativeNotificationsBridge(), "MishkatNativeNotifications")
             webChromeClient = WebChromeClient()
             webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView, url: String) {
                     super.onPageFinished(view, url)
                     if (!url.startsWith("https://mishkatt.framer.website")) return
-                    view.evaluateJavascript(
-                        """
-                        (function() {
-                          if (window.__mishkatNativeAudioHooked) return;
-                          window.__mishkatNativeAudioHooked = true;
-
-                          function currentMeta(media) {
-                            var m = window.__mishkatNowPlaying || {};
-                            return {
-                              title: m.title || (media && (media.getAttribute('aria-label') || media.getAttribute('title'))) || document.title || 'تلاوة قرآنية',
-                              artist: m.artist || 'القرآن الكريم',
-                              portrait: m.portrait || ''
-                            };
-                          }
-
-                          function activeMedia() {
-                            var requested = window.__mishkatRequestedAudio || window.__mishkatActiveAudio;
-                            if (requested && !requested.paused && !requested.ended && requested.currentSrc) return requested;
-                            return Array.prototype.find.call(
-                              document.querySelectorAll('audio,video'),
-                              function(el) { return !el.paused && !el.ended && el.currentSrc; }
-                            );
-                          }
-
-                          function handoff(media) {
-                            if (!media || !media.currentSrc || !window.MishkatNativeAudio) return false;
-                            var m = currentMeta(media);
-                            return window.MishkatNativeAudio.onBackground(
-                              String(m.title).trim(), media.currentSrc, Number(media.currentTime || 0),
-                              String(m.artist), String(m.portrait)
-                            );
-                          }
-
-                          document.addEventListener('mishkat-audio-start', function(event) {
-                            var d = event.detail || {};
-                            window.__mishkatNowPlaying = {
-                              audio: d.audio || null,
-                              title: d.title || '',
-                              artist: d.artist || '',
-                              portrait: d.portrait || d.image || ''
-                            };
-                          }, true);
-
-                          document.addEventListener('play', function(event) {
-                            var el = event.target;
-                            if (!(el instanceof HTMLMediaElement)) return;
-                            window.setTimeout(function() {
-                              var m = currentMeta(el);
-                              if (document.visibilityState === 'hidden') {
-                                handoff(el);
-                              } else if (window.MishkatNativeAudio) {
-                                window.MishkatNativeAudio.onPlay(String(m.title).trim(), String(m.artist), String(m.portrait));
-                              }
-                            }, 80);
-                          }, true);
-
-                          function notifyNativePause() {
-                            window.setTimeout(function() {
-                              if (document.visibilityState !== 'hidden' && !activeMedia() && window.MishkatNativeAudio) {
-                                window.MishkatNativeAudio.onPause();
-                              }
-                            }, 220);
-                          }
-
-                          function notifyNativeStop() {
-                            window.setTimeout(function() {
-                              if (document.visibilityState !== 'hidden' && !activeMedia() && window.MishkatNativeAudio) {
-                                window.MishkatNativeAudio.onStop();
-                              }
-                            }, 220);
-                          }
-
-                          function handleMediaPause() {
-                            if (document.visibilityState === 'hidden') return;
-                            notifyNativePause();
-                          }
-
-                          document.addEventListener('pause', handleMediaPause, true);
-                          document.addEventListener('ended', notifyNativeStop, true);
-
-                          document.addEventListener('visibilitychange', function() {
-                            if (document.visibilityState === 'hidden') {
-                              var media = activeMedia();
-                              if (media && handoff(media)) {
-                                // Pause the WebView copy only after Android accepted the
-                                // native background handoff, avoiding an accidental cutoff.
-                                media.pause();
-                              }
-                            } else {
-                              var resumedAt = Number(window.MishkatNativeAudio.onForeground());
-                              if (resumedAt >= 0) {
-                                var media = window.__mishkatRequestedAudio || document.querySelector('audio,video');
-                                if (media) {
-                                  media.currentTime = resumedAt / 1000;
-                                  media.play().catch(function() {});
-                                }
-                              }
-                              notifyNativePause();
-                            }
-                          });
-                        })();
-                        """.trimIndent(),
-                        null
-                    )
                 }
-            }
-        }
-
-        AudioPlaybackService.nativeActionHandler = { action ->
-            runOnUiThread {
-                if (!::webView.isInitialized) return@runOnUiThread
-                val script = when {
-                    action == "next" || action == "previous" -> {
-                        val direction = if (action == "next") 1 else -1
-                        "(function(){var a=window.__mishkatRequestedAudio||window.__mishkatActiveAudio;if(a)window.dispatchEvent(new CustomEvent('mishkat-track-step',{detail:{audio:a,direction:$direction}}));})()"
-                    }
-                    action == "play" -> "(function(){var a=window.__mishkatRequestedAudio||window.__mishkatActiveAudio;if(a&&a.paused)a.play().catch(function(){});})()"
-                    action == "pause" -> "(function(){var a=window.__mishkatRequestedAudio||window.__mishkatActiveAudio;if(a&&!a.paused)a.pause();})()"
-                    action == "toggle" -> "(function(){var a=window.__mishkatRequestedAudio||window.__mishkatActiveAudio;if(a){if(a.paused)a.play().catch(function(){});else a.pause();}})()"
-                    action.startsWith("seek:") -> {
-                        val position = action.substringAfter("seek:").toLongOrNull()?.coerceAtLeast(0L) ?: 0L
-                        "(function(){var a=window.__mishkatRequestedAudio||window.__mishkatActiveAudio;if(a)a.currentTime=$position/1000;})()"
-                    }
-                    else -> ""
-                }
-                if (script.isNotBlank()) webView.evaluateJavascript(script, null)
             }
         }
 
@@ -344,12 +114,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        MishkatNotificationScheduler.restoreSchedules(this)
-        MishkatNotificationScheduler.setAppInBackground(this, false)
     }
 
     override fun onPause() {
-        MishkatNotificationScheduler.setAppInBackground(this, true)
         super.onPause()
     }
 
@@ -359,7 +126,6 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        AudioPlaybackService.nativeActionHandler = null
         if (::webView.isInitialized) {
             webView.stopLoading()
             webView.loadUrl("about:blank")
