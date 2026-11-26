@@ -1,0 +1,1 @@
+Build trigger requested on 2026-11-26. This file intentionally contains no application code; it triggers the existing push workflow to build the current Mishkat APK.
