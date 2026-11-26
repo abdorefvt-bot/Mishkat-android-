@@ -22,6 +22,18 @@ class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
 
     inner class NativeNotificationsBridge {
+        // Keep the legacy prayer callbacks available to the Framer page.
+        // Prayer notifications are intentionally disabled; these are compatibility no-ops.
+        @JavascriptInterface
+        fun schedulePrayerDay(date: String, timeZone: String, timesJson: String, completedJson: String) {
+            if (!isTrustedPage()) return
+        }
+
+        @JavascriptInterface
+        fun updatePrayerStatuses(date: String, completedJson: String) {
+            if (!isTrustedPage()) return
+        }
+
         @JavascriptInterface
         fun setAdhkarNotifications(enabled: Boolean) {
             if (!isTrustedPage()) return
